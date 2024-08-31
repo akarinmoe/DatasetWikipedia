@@ -5,6 +5,7 @@ import os
 import multiprocessing
 from multiprocessing import Pool, Manager
 import re
+from tqdm import tqdm
 
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com' 
 
@@ -14,7 +15,7 @@ ds = load_dataset("wikimedia/wikipedia", "20231101.en")
 def clean_text(text):
     return re.sub(r'[^\x00-\x7F]+', '', text)
 
-# A function that converts text to an image
+# Function to convert text to an image
 def text_to_image(text, image_size, font_size, font_path, output_path, index, carry_over_line="", shared_dict=None):
     try:
         image = Image.new("RGB", image_size, "white")
@@ -52,13 +53,18 @@ def text_to_image(text, image_size, font_size, font_path, output_path, index, ca
                 "text": text,
                 "image_path": output_path
             }
+            
+            # Write each generated image info to the JSON file in real-time
+            with open('index_to_text.json', 'a', encoding='utf-8') as f:
+                json.dump({index: {"text": text, "image_path": output_path}}, f, ensure_ascii=False)
+                f.write("\n")  # Add a newline after each record for readability
         
-        return last_line  # Return the last line to be carried over, if any
+        return last_line  # Return the last line to be carried over to the next image (if any)
     except IOError as e:
         print(f"Error: {e}")
         return ""
 
-# Define a working function for multiple processes
+# Define a function for multi-process work
 def process_text(index, words_per_group, font_path, image_size, font_size, shared_dict):
     try:
         sample_text = ds['train']['text'][index]
@@ -82,22 +88,22 @@ if __name__ == "__main__":
     manager = Manager()
     shared_dict = manager.dict()
 
+    # Initialize the JSON file
+    with open('index_to_text.json', 'w', encoding='utf-8') as f:
+        f.write("")  # Clear the file contents
+
     # Set the number of processes
-    # num_processes = max(1, multiprocessing.cpu_count() - 2)
     num_processes = 1
 
     print(f"Using {num_processes} processes for processing.")
 
-    # set up parameters
+    # Set parameters
     image_size = (512, 512)
     font_size = 32
     font_path = "times.ttf"
-    words_per_group = 100  # The number of words in each group
+    words_per_group = 100  # Number of words per group
 
-    # Modify pool.starmap to support shared dict passing
+    # Use tqdm to wrap the range and provide a progress bar
     with Pool(processes=num_processes) as pool:
-        pool.starmap(process_text, [(index, words_per_group, font_path, image_size, font_size, shared_dict) for index in range(len(ds['train']))])
-    
-    # Save the index to text mapping to a JSON file
-    with open('index_to_text.json', 'w', encoding='utf-8') as f:
-        json.dump(dict(shared_dict), f, ensure_ascii=False, indent=4)
+        for _ in tqdm(pool.starmap(process_text, [(index, words_per_group, font_path, image_size, font_size, shared_dict) for index in range(len(ds['train']))]), total=len(ds['train'])):
+            pass
