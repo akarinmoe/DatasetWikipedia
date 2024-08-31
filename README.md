@@ -24,7 +24,7 @@ python rendermulti.py
 
 
 
-## tips:
+## Tips:
 
 Even if the code includes `os.environ['HF_ENDPOINT'] = https://hf-mirror.com`, you could also run `export HF_ENDPOINT=https://hf-mirror.com`.
 
