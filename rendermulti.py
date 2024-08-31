@@ -70,7 +70,7 @@ def process_text(index, words_per_group, font_path, image_size, font_size, share
         while group_index < len(words):
             group_text = ' '.join(words[group_index:group_index + words_per_group])
             group_index += words_per_group
-            output_image_path = f"./outputimglast/{index}_{group_index//words_per_group}.png"
+            output_image_path = f"./outputimg/{index}_{group_index//words_per_group}.png"
             carry_over_line = text_to_image(group_text, image_size, font_size, font_path, output_image_path, f"{index}_{group_index//words_per_group}", carry_over_line, shared_dict)
     except IndexError as e:
         print(f"No text available for index {index}: {e}")
