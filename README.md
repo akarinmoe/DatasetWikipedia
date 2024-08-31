@@ -15,6 +15,8 @@ python = 3.8.19
 login your account of huggingface using access token first
 
 ```
+mkdir outputimg
+
 pip install -r requirements.txt
 
 python rendermulti.py
