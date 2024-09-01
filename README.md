@@ -1,4 +1,4 @@
-# photo generation using wikipedia corpus
+# Photo Generation Using Wikipedia Corpus
 
 
 
