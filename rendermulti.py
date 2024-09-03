@@ -1,5 +1,5 @@
 import json
-from datasets import load_dataset
+from datasets import load_from_disk
 from PIL import Image, ImageDraw, ImageFont
 import os
 import multiprocessing
@@ -9,7 +9,7 @@ from tqdm import tqdm
 
 os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com' 
 
-ds = load_dataset("wikimedia/wikipedia", "20231101.en")
+ds = load_from_disk("./datasets")
 
 # Clean text to remove special characters that cannot be displayed
 def clean_text(text):
@@ -25,8 +25,13 @@ def text_to_image(text, image_size, font_size, font_path, output_path, index, ca
         lines = []
         current_line = ""
         
+        # Add padding for the left and right margins
+        left_margin = 20
+        right_margin = 20
+        max_line_width = image_size[0] - left_margin - right_margin
+        
         for word in words:
-            if draw.textsize(current_line + " " + word, font=font)[0] <= image_size[0]:
+            if draw.textsize(current_line + " " + word, font=font)[0] <= max_line_width:
                 current_line += " " + word
             else:
                 if current_line:
@@ -42,9 +47,9 @@ def text_to_image(text, image_size, font_size, font_path, output_path, index, ca
             line_width, line_height = draw.textsize(line, font=font)
             # Check if adding this line will exceed the image height
             if y_pos + line_height > image_size[1]:
-                last_line = line  # This line will be carried over to the next image
+                last_line = line
                 break
-            draw.text((0, y_pos), line, font=font, fill="black")
+            draw.text((left_margin, y_pos), line, font=font, fill="black")
             y_pos += line_height
         
         image.save(output_path)
@@ -90,7 +95,7 @@ if __name__ == "__main__":
 
     # Initialize the JSON file
     with open('index_to_text.json', 'w', encoding='utf-8') as f:
-        f.write("")  # Clear the file contents
+        f.write("")
 
     # Set the number of processes
     num_processes = 1
@@ -101,7 +106,7 @@ if __name__ == "__main__":
     image_size = (512, 512)
     font_size = 32
     font_path = "times.ttf"
-    words_per_group = 100  # Number of words per group
+    words_per_group = 100
 
     # Use tqdm to wrap the range and provide a progress bar
     with Pool(processes=num_processes) as pool:
