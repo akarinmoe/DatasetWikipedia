@@ -103,7 +103,7 @@ def process_text(index, font_path, image_size, font_size, shared_dict):
             # Join the remaining words into a string
             remaining_text = ' '.join(remaining_words)
             # Generate output image path
-            output_image_path = f"./outputimg2/{index}_{image_counter}.png"
+            output_image_path = f"./outputimg/{index}_{image_counter}.png"
             # Generate the image and get the carry over text
             carry_over_text = text_to_image(
                 text=' '.join(remaining_words),
@@ -133,7 +133,7 @@ def process_text(index, font_path, image_size, font_size, shared_dict):
         print(f"No text available for index {index}: {e}")
 
 if __name__ == "__main__":
-    os.makedirs("./outputimg2", exist_ok=True)
+    os.makedirs("./outputimg", exist_ok=True)
 
     # Create a shared dictionary using Manager
     manager = Manager()
