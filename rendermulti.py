@@ -64,16 +64,19 @@ def text_to_image(text, image_size, font_size, font_path, output_path, index, ca
         # Save the image
         image.save(output_path)
 
+        # Join lines_to_draw to get the actual text drawn on the image
+        drawn_text = ' '.join(lines_to_draw)
+
         # Update shared dictionary
         if shared_dict is not None:
             shared_dict[index] = {
-                "text": text,
+                "text": drawn_text,  # Use the drawn text instead of the full text
                 "image_path": output_path
             }
 
             # Append the image information to the JSON file
             with open('index_to_text.json', 'a', encoding='utf-8') as f:
-                json.dump({index: {"text": text, "image_path": output_path}}, f, ensure_ascii=False)
+                json.dump({index: {"text": drawn_text, "image_path": output_path}}, f, ensure_ascii=False)
                 f.write("\n")  # Add newline for each record
 
         # Return the remaining text to carry over to the next image
