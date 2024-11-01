@@ -25,7 +25,7 @@ After downloading the datasets locally
 ```
 mkdir outputimg
 
-python rendermulti.py
+bash run.sh
 ```
 
 

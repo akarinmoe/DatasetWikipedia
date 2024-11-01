@@ -6,8 +6,7 @@ import multiprocessing
 from multiprocessing import Pool, Manager
 import re
 from tqdm import tqdm
-
-# os.environ['HF_ENDPOINT'] = 'https://hf-mirror.com' 
+import math
 
 ds = load_from_disk("./datasets")
 
@@ -16,9 +15,8 @@ def clean_text(text):
     return re.sub(r'[^\x00-\x7F]+', '', text)
 
 # Function to convert text to an image
-def text_to_image(text, image_size, font_size, font_path, output_path, index, carry_over_text="", shared_dict=None):
+def text_to_image(text, image_size, font_size, font_path, output_path, index, carry_over_text="", shared_dict=None, meta_data_path=None):
     try:
-        # Create a new image with white background
         image = Image.new("RGB", image_size, "white")
         draw = ImageDraw.Draw(image)
         font = ImageFont.truetype(font_path, font_size)
@@ -29,7 +27,7 @@ def text_to_image(text, image_size, font_size, font_path, output_path, index, ca
         lines = []
         current_line = ""
 
-        # Add padding for left and right margins
+        # Add padding for the left and right margins
         left_margin = 20
         right_margin = 20
         max_line_width = image_size[0] - left_margin - right_margin
@@ -75,7 +73,7 @@ def text_to_image(text, image_size, font_size, font_path, output_path, index, ca
             }
 
             # Append the image information to the JSON file
-            with open('index_to_text.json', 'a', encoding='utf-8') as f:
+            with open(meta_data_path, 'a', encoding='utf-8') as f:
                 json.dump({index: {"text": drawn_text, "image_path": output_path}}, f, ensure_ascii=False)
                 f.write("\n")  # Add newline for each record
 
@@ -88,66 +86,58 @@ def text_to_image(text, image_size, font_size, font_path, output_path, index, ca
         return ""
 
 # Define a function for multi-process work
-def process_text(index, font_path, image_size, font_size, shared_dict):
+def process_text(index, words_per_group, font_path, image_size, font_size, shared_dict, meta_data_path):
     try:
-        # Load the text for the current sample
         sample_text = ds['train']['text'][index]
         clean_sample_text = clean_text(sample_text)
         words = clean_sample_text.split()
-        total_words = len(words)
-        current_word = 0
+        group_index = 0
         carry_over_text = ""
 
-        image_counter = 0
+        while group_index < len(words) or carry_over_text:
+            group_text = ' '.join(words[group_index:group_index + words_per_group])
+            group_index += words_per_group
+            output_image_path = f"./outputimg/{index}_{group_index//words_per_group}.png"
 
-        while current_word < total_words:
-            # Determine the remaining words
-            remaining_words = words[current_word:]
-            # Join the remaining words into a string
-            remaining_text = ' '.join(remaining_words)
-            # Generate output image path
-            output_image_path = f"./outputimg/{index}_{image_counter}.png"
             # Generate the image and get the carry over text
             carry_over_text = text_to_image(
-                text=' '.join(remaining_words),
+                text=group_text,
                 image_size=image_size,
                 font_size=font_size,
                 font_path=font_path,
                 output_path=output_image_path,
-                index=f"{index}_{image_counter}",
+                index=f"{index}_{group_index//words_per_group}",
                 carry_over_text=carry_over_text,
-                shared_dict=shared_dict
+                shared_dict=shared_dict,
+                meta_data_path=meta_data_path
             )
-            # Update the current_word based on how many words were drawn
-            # To do this, we need to calculate how many words were used in lines_to_draw
-            # Since we don't have that information, we'll iteratively remove words until carry_over_text matches
-            # A simple approach is to compare the remaining_text with carry_over_text
-
-            # Split the carry_over_text back into words
-            carry_over_words = carry_over_text.split()
-            # Calculate how many words were used
-            words_used = len(remaining_words) - len(carry_over_words)
-            # Update the current_word pointer
-            current_word += words_used
-            # Increment the image counter
-            image_counter += 1
 
     except IndexError as e:
         print(f"No text available for index {index}: {e}")
 
 if __name__ == "__main__":
-    os.makedirs("./outputimg", exist_ok=True)
+    WORLD_SIZE = int(os.environ['WORLD_SIZE'])
+    RANK = int(os.environ['RANK'])
+    
+    TOTAL_INDEX = 5000000
+    # Calculate the size of each chunk
+    chunk_size = math.ceil(TOTAL_INDEX / WORLD_SIZE)
 
+    # Calculate the start and end indices for the current rank
+    INDEX_START = RANK * chunk_size
+    INDEX_END = min((RANK + 1) * chunk_size, TOTAL_INDEX)
+    
     # Create a shared dictionary using Manager
     manager = Manager()
     shared_dict = manager.dict()
 
+    meta_data_path = f"./{RANK}.json"
+
     # Initialize the JSON file
-    with open('index_to_text.json', 'w', encoding='utf-8') as f:
+    with open(meta_data_path, 'w', encoding='utf-8') as f:
         f.write("")
 
     # Set the number of processes
-    # num_processes = multiprocessing.cpu_count()
     num_processes = 1
 
     print(f"Using {num_processes} processes for processing.")
@@ -155,13 +145,13 @@ if __name__ == "__main__":
     # Set parameters
     image_size = (512, 512)
     font_size = 32
-    font_path = "times.ttf"  # Ensure this font exists or provide a valid path
+    font_path = "times.ttf"
+    words_per_group = 100
 
     # Use tqdm to wrap the range and provide a progress bar
     with Pool(processes=num_processes) as pool:
-        list(tqdm(pool.starmap(
+        for _ in tqdm(pool.starmap(
             process_text, 
-            [(index, font_path, image_size, font_size, shared_dict) for index in range(len(ds['train']))]
-        ), total=len(ds['train'])))
-
-    print("Processing complete.")
+            [(index, words_per_group, font_path, image_size, font_size, shared_dict, meta_data_path) for index in range(INDEX_START, INDEX_END)]
+        ), total=INDEX_END - INDEX_START):
+            pass
